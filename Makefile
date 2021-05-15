@@ -1,4 +1,15 @@
-NFLAGS=--no-color --release -Pnogc -Pnochecks
-all:
-	nelua $(NFLAGS) -o forkmonhook.so forkmonhook.nelua
-	LD_PRELOAD=./forkmonhook.so nelua -t hello.nelua
+NELUA=nelua
+NFLAGS=--no-color -Pnogc -Pnochecks -Pnocstaticassert
+CFLAGS=-Os
+CC=gcc
+
+all: forkmonhook.so
+
+test:
+	LD_PRELOAD=./forkmonhook.so FORKMON_FILTER="%.lua$$" lua tests/example.lua
+
+forkmonhook.so: forkmonhook.c
+	$(CC) $(CFLAGS) -fPIC -shared -o forkmonhook.so forkmonhook.c
+
+forkmonhook.c: forkmonhook.nelua sys.nelua
+	nelua $(NFLAGS) -o forkmonhook.c forkmonhook.nelua

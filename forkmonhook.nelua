@@ -1,16 +1,18 @@
 require 'sys'
 require 'string'
 require 'hashmap'
+require 'io'
 
 local RESTART_DELAY <comptime> = 20
 local IGNORE_DELAY <comptime> = 200
 local initialized: boolean = false
 local handling_signal: boolean = false
+local quiet: boolean = false
 local parent_inotify_fd: cint = -1
 local child_pid: cint = 0
 local root_pid: cint = getpid()
 local last_restart_ticks: uint64
-local filter: string = '%.nelua$'
+local filter: cstring
 local time_checkpoint: timespec
 local tracked_files: hashmap(string, boolean)
 local FopenFunc: type = @function(cstring, cstring): *FILE
@@ -22,10 +24,17 @@ local orig_open: OpenFunc
 -- Create a new inotify instance and add file to watch.
 local function inotify_init_watch(filename: cstring, mask: cint): (cint, cint)
   local fd = inotify_init()
-  assert(fd >= 0, 'failed to initialize inotify')
+  assert(fd >= 0, '[forkmon] failed to initialize inotify')
   local wd = inotify_add_watch(fd, filename, mask) -- watch the file
-  assert(wd >= 0, 'failed to watch file')
+  assert(wd >= 0, '[forkmon] failed to watch file')
   return fd, wd
+end
+
+local function logf(fmt: string, ...: varargs)
+  if not quiet then
+    io.stderr:writef(fmt, ...)
+    io.stderr:flush()
+  end
 end
 
 -- Monitor a file for changes, returns true when the filed changed.
@@ -34,14 +43,16 @@ local function monitor_file(filename: cstring): boolean
   if parent_inotify_fd >= 0 then -- a parent process restarted due to a file change
     -- lets just add this file to track in the parent inotify fd
     -- so we can avoid lot's of forks when changing the same file
-    fprintf(stderr, 'track dep %s\n', filename) fflush(stderr)
+    -- logf("[forkmon] watch dependency '%s'\n", filename)
     local inotify_wd = inotify_add_watch(parent_inotify_fd, filename, inotify_mask) -- watch the file
     assert(inotify_wd >= 0, 'failed to watch file')
     return false
   end
-  fprintf(stderr, 'track %s\n', filename) fflush(stderr)
+  if not quiet then
+    logf("[forkmon] watch '%s'\n", filename)
+  end
   local pid = fork() -- fork in two processes
-  assert(pid >= 0, 'fork failed')
+  assert(pid >= 0, '[forkmon] fork failed')
   if pid == 0 then -- let the child process continue
     setpgid(0, 0) -- set a new process group for the child
     return false
@@ -74,10 +85,10 @@ local function monitor_file(filename: cstring): boolean
         pos = pos + #inotify_event + event.len
       end
       if wdchange then -- watched file for this process changed
-        fprintf(stderr, 'changed %s\n', filename) fflush(stderr)
+        logf("[forkmon] file '%s' changed, resuming from it..\n", filename)
         parent_inotify_fd = inotify_fd
       else -- watched file for a child process changed
-        fprintf(stderr, 'dep file changed\n') fflush(stderr)
+        logf("[forkmon] some file changed, resuming from '%s'...\n", filename)
         parent_inotify_fd = -1
         -- reinitialize inotify to cleanup all old watches
         close(inotify_fd)
@@ -85,7 +96,7 @@ local function monitor_file(filename: cstring): boolean
       end
       killwait(pid, SIGUSR2) -- propagate children kill and wait them to finish
       pid = fork() -- fork in two processes
-      assert(pid >= 0, 'fork failed')
+      assert(pid >= 0, '[forkmon] fork failed')
       if pid == 0 then -- let the child process continue
         setpgid(0, 0) -- set a new process group for the child
         local nowtext = tostring(now)
@@ -130,9 +141,18 @@ end
 
 do -- initialize
   -- setup signal handler, used to recursively propagate kill signal on children processes
-  assert(signal(SIGUSR2, signal_handler) == 0, 'failed to setup signal handler')
+  assert(signal(SIGUSR2, signal_handler) == 0, '[forkmon] failed to setup signal handler')
   -- unsert LD_PRELOAD because we don't want to monitor children processes
   unsetenv("LD_PRELOAD")
+  -- get filter
+  filter = getenv('FORKMON_FILTER')
+  if not filter then
+    logf("[forkmon] %s", 'the environment variable FORKMON_FILTER is not set, please set one (example FORKMON_FILTER="%.lua$")\n')
+    exit(-1)
+  end
+  if getenv('FORKMON_QUIET') then
+    quiet = true
+  end
   -- mask as initialized
   initialized = true
 end

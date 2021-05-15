@@ -9,16 +9,13 @@ global RTLD_NEXT: pointer <cimport, nodecl, const>
 ## cinclude '<stdlib.h>'
 global function realpath(name: cstring, resolved: cstring): cstring <cimport, nodecl> end
 global function setenv(name: cstring, value: cstring, overwrite: cint): cint <cimport, nodecl> end
+global function getenv(name: cstring): cstring <cimport, nodecl> end
 global function unsetenv(name: cstring): cint <cimport, nodecl> end
+global function exit(status: cint): void <cimport, nodecl> end
 
 -- stdio
 ## cinclude '<stdio.h>'
 global FILE <cimport,nodecl,forwarddecl> = @record{}
-global stderr: *FILE <cimport,nodecl>
-global function fflush(stream: *FILE): cint <cimport, nodecl> end
-global function fprintf(stream: *FILE, format: cstring, ...: cvarargs): cint <cimport, nodecl> end
--- global function fclose(stream: *FILE): cint <cimport,nodecl> end
--- global function fileno(stream: *FILE): cint <cimport,nodecl> end
 
 -- errno
 ## cinclude '<errno.h>'
