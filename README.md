@@ -24,7 +24,7 @@ foo!
 finished
 ```
 
-The application will keep running, waiting for any watached file change.
+The application will keep running, waiting for any watched file change.
 Now try to edit to `foo.lua` and change the print to `'hello world!'`, you should get something like:
 ```
 [forkmon] file '/home/bart/projects/forkmon/tests/foo.lua' changed, resuming from it..
@@ -33,7 +33,9 @@ finished
 ```
 
 Notice that only `'hello world!'` is printed, but not `'startup'`,
-this means the application did not restart! Because a forked (cloned) application was waiting for changes in the `foo.lua` and resumed.
+this means the application did not restart from beginning, but from
+the middle instead!
+Because a forked (cloned) application was waiting for changes in the `foo.lua` and resumed.
 
 ## How it works
 
@@ -104,3 +106,7 @@ This has been implemented using the [Nelua](https://nelua.io/)
 programming language,
 however a standalone C file is bundled in the repository,
 thus just a C compiler is needed to compile the project.
+
+## License
+
+MIT License, see LICENSE
