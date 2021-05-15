@@ -1,0 +1,140 @@
+## pragmas.nogc = true
+## context.globalpragmas.nocstaticassert = true
+
+require 'dl'
+require 'C.stdio'
+require 'string'
+require 'hashmap'
+require 'sys'
+
+local INOTIFY_MASK: cint = IN_MODIFY | IN_CREATE | IN_DELETE_SELF | IN_MOVE_SELF
+local RESTART_DELAY <comptime> = 50
+local tracked_files: hashmap(string, boolean)
+local initialized = false
+local child_pid: cint = 0
+local root_pid: cint = getpid()
+local filter = '%.nelua$'
+local ClockGettimeFunc = @function(cint, *timespec_t): cint
+local orig_clock_gettime: ClockGettimeFunc
+local time_checkpoint: timespec_t
+
+local function monitor_file(filename: string): boolean
+  local pid = fork() -- fork in two processes
+  assert(pid >= 0, 'fork failed')
+  if pid == 0 then -- let the child process continue
+    setpgid(0, 0) -- set a new process group for the child
+    return false
+  end
+  -- parent process will only monitor the file
+  child_pid = pid
+  local inotify_fd = inotify_init()
+  assert(inotify_fd >= 0, 'failed to initialize inotify')
+  local inotify_wid = inotify_add_watch(inotify_fd, filename, INOTIFY_MASK) -- watch the file
+  assert(inotify_wid >= 0, 'failed to watch file')
+  local buf: [1024]byte -- buffer for inotify events
+  while true do -- keep waiting the file to change indefinitely
+    local res = read(inotify_fd, nilptr, 0) -- wait for an event
+    if res == -1 and errno == EINTR then -- interrupted by a signal (like Ctrl+C on terminal)
+      killwait(root_pid, SIGUSR2) -- recursive kill all children processes
+    end
+    msleep(RESTART_DELAY) -- wait some time so all file changes can flush
+    local len = read(inotify_fd, &buf, #buf) -- wait an inotify event
+    if len > 0 then -- got an inotify event, must be a file change
+      print('filed changed: ', filename)
+      killwait(pid, SIGUSR2) -- propagate children kill and wait them to finish
+      pid = fork() -- fork in two processes
+      assert(pid >= 0, 'fork failed')
+      if pid == 0 then -- let the child process continue
+        setpgid(0, 0) -- set a new process group for the child
+        local now = tostring(uticks())
+        setenv("FMON_RESTART_TICKS", now, 1)
+        now:destroy()
+        return true
+      end
+      child_pid = pid
+    end
+  end
+  return false -- actually unreachable
+end
+
+-- Called once a file is opened.
+local function track_file_open(filename: string, mode: string, fp: *C.FILE): boolean
+  if not initialized or -- ignore when the library was not initialized yet
+     not fp or -- skip failed opens
+     mode == 'w' then -- skip write only
+    return false
+  end
+  filename = resolvpath(filename)
+  defer filename:destroy() end
+  if filename == '' or -- skip failed path resolutions
+     filename:find('^/tmp') ~= 0 or -- skip temporary files
+     filename:find(filter) == 0 or -- skip files not in the filter
+     tracked_files:peek(filename) then -- skip files already tracked
+    return false
+  end
+  print('track', filename)
+  tracked_files:set(string.copy(filename), true)
+  local res = monitor_file(filename)
+  return res
+end
+
+local handling_signal = false
+
+-- Signal handler.
+local function signal_handler(signum: cint)
+  if handling_signal then -- signal already being handled, this should hardly happen
+    return
+  end
+  handling_signal = true
+  if child_pid ~= 0 then -- propagate kill on child process
+    killwait(child_pid, SIGUSR2)
+  end
+  killwait(-getpid(), SIGKILL) -- kill all spawned sub processes
+end
+
+local function init()
+  -- setup signal handler, used to recursively propagate kill signal on children processes
+  local sa: sigaction_t
+  sigemptyset(&sa.sa_mask)
+  sa.sa_handler = signal_handler
+  assert(sigaction(SIGUSR2, &sa, nilptr) == 0, 'failed to setup signal handler')
+  initialized = true
+end
+
+init()
+
+local FopenFunc = @function(cstring, cstring): *C.FILE
+local orig_fopen: FopenFunc
+local orig_fopen64: FopenFunc
+
+-- C `fopen` hook.
+local function fopen(filename: cstring <const>, mode: cstring <const>): *C.FILE <cexport, codename 'fopen'>
+  if not orig_fopen then
+    orig_fopen = (@FopenFunc)(dlsym(RTLD_NEXT, "fopen"))
+  end
+  local fp: *C.FILE = orig_fopen(filename, mode)
+  if track_file_open(filename, mode, fp) then -- file changed, we need to open again
+    C.fclose(fp)
+    fp = orig_fopen(filename, mode)
+  end
+  return fp
+end
+
+-- C `fopen64` hook.
+local function fopen64(filename: cstring <const>, mode: cstring <const>): *C.FILE <cexport, codename 'fopen64'>
+  if not orig_fopen64 then
+    orig_fopen64 = (@FopenFunc)(dlsym(RTLD_NEXT, "fopen64"))
+  end
+  local fp: *C.FILE = orig_fopen64(filename, mode)
+  if track_file_open(filename, mode, fp) then -- file changed, we need to open again
+    C.fclose(fp)
+    fp = orig_fopen64(filename, mode)
+  end
+  return fp
+end
+
+-- Shared library entry point.
+local function setup() <entrypoint, cattribute 'constructor'>
+  local function nelua_main(argc: cint, argv: *cstring): cint <cimport,nodecl> end
+  nelua_main(0, nilptr)
+end

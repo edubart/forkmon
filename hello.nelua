@@ -1,0 +1,3 @@
+## print 'ho!!'
+-- require 'string'
+print 'hi!'

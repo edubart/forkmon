@@ -1,0 +1,92 @@
+-- errno
+## cinclude '<errno.h>'
+global errno: cint <cimport, nodecl>
+global EINTR: cint <comptime> = 4
+
+-- time
+## cinclude '<time.h>'
+global timespec_t: type <cimport, nodecl, ctypedef 'timespec'> = @record{
+  tv_sec: clong,
+  tv_nsec: clong
+}
+global function nanosleep(requested_time: *timespec_t, remaining: *timespec_t): cint <cimport, nodecl> end
+global function clock_gettime(clock_id: cint, tp: *timespec_t): cint <cimport, nodecl> end
+global CLOCK_MONOTONIC: cint <comptime> = 1
+
+-- signal
+## cinclude '<signal.h>'
+global sigset_t: type <cimport, nodecl, cincomplete> = @record{}
+global sigaction_t: type <nodecl, cimport, ctypedef 'sigaction', cincomplete> = @record{
+  sa_handler: function(cint),
+  sa_mask: sigset_t,
+  sa_flags: cint,
+  sa_restorer: function()
+}
+global SIGKILL: cint <comptime> = 9
+global SIGUSR2: cint <comptime> = 12
+global function sigaction(sig: cint, act: *sigaction_t, oact: *sigaction_t): cint <cimport, nodecl> end
+global function sigemptyset(set: *sigset_t): cint <cimport, nodecl> end
+
+-- unistd
+## cinclude '<unistd.h>'
+global function getpid(): cint <cimport, nodecl> end
+global function setpgid(pid: cint, pgid: cint): cint <cimport, nodecl> end
+global function fork(): cint <cimport, nodecl> end
+global function kill(pid: cint, sig: cint): cint <cimport, nodecl> end
+global function read(fd: cint, buf: pointer, nbytes: csize): clong <cimport, nodecl> end
+-- global function close(fd: cint): cint <cimport, nodecl> end
+-- global function _exit(status: cint) <cimport, nodecl> end
+
+-- wait
+## cinclude '<sys/wait.h>'
+global function waitpid(pid: cint, stat_loc: *cint, options: cint): cint <cimport, nodecl> end
+
+-- stdlib
+## cinclude '<stdlib.h>'
+global function realpath(name: cstring, resolved: cstring): cstring <cimport, nodecl> end
+global function setenv(name: cstring, value: cstring, overwrite: cint): cint <cimport, nodecl> end
+
+-- inotify
+## cinclude '<sys/inotify.h>'
+global inotify_event: type <cimport, nodecl, ctypedef> = @record{
+  wd: cint,
+  mask: uint32,
+  cookie: uint32,
+  len: uint32,
+  name: [0]cchar
+}
+global function inotify_init(): cint <cimport, nodecl> end
+global function inotify_add_watch(fd: cint, name: cstring, mask: uint32): cint <cimport, nodecl> end
+-- global function inotify_rm_watch(fd: cint, wd: cint): cint <cimport, nodecl> end
+global IN_MODIFY: cint <cimport, nodecl, const>
+global IN_CREATE: cint <cimport, nodecl, const>
+global IN_DELETE_SELF: cint <cimport, nodecl, const>
+global IN_MOVE_SELF: cint <cimport, nodecl, const>
+
+-- utilities
+
+global function msleep(ms: clong): void
+  local ts: timespec_t
+  ts.tv_sec = ms // 1000
+  ts.tv_nsec = (ms % 1000) * 1000000
+  nanosleep(&ts, nilptr)
+end
+
+global function uticks(): uint64
+  local ts: timespec_t
+  clock_gettime(CLOCK_MONOTONIC, &ts)
+  return ts.tv_sec * 1000000 + ts.tv_nsec // 1000
+end
+
+global function killwait(pid: cint, sig: cint): cint
+  kill(pid, sig)
+  return waitpid(pid, nilptr, 0)
+end
+
+global function resolvpath(path: string): string
+  local resolved_path: [4097]cchar
+  if #path < #resolved_path and realpath(path, &resolved_path[0]) then
+    return string.copy(&resolved_path[0])
+  end
+  return ''
+end
