@@ -9,11 +9,16 @@ global RTLD_NEXT: pointer <cimport, nodecl, const>
 ## cinclude '<stdlib.h>'
 global function realpath(name: cstring, resolved: cstring): cstring <cimport, nodecl> end
 global function setenv(name: cstring, value: cstring, overwrite: cint): cint <cimport, nodecl> end
+global function unsetenv(name: cstring): cint <cimport, nodecl> end
 
 -- stdio
 ## cinclude '<stdio.h>'
 global FILE <cimport,nodecl,forwarddecl> = @record{}
-global function fclose(stream: *FILE): cint <cimport,nodecl> end
+global stderr: *FILE <cimport,nodecl>
+global function fflush(stream: *FILE): cint <cimport, nodecl> end
+global function fprintf(stream: *FILE, format: cstring, ...: cvarargs): cint <cimport, nodecl> end
+-- global function fclose(stream: *FILE): cint <cimport,nodecl> end
+-- global function fileno(stream: *FILE): cint <cimport,nodecl> end
 
 -- errno
 ## cinclude '<errno.h>'
@@ -44,6 +49,7 @@ global function fork(): cint <cimport, nodecl> end
 global function kill(pid: cint, sig: cint): cint <cimport, nodecl> end
 global function read(fd: cint, buf: pointer, nbytes: csize): clong <cimport, nodecl> end
 global function close(fd: cint): cint <cimport, nodecl> end
+global function access(name: cstring, type: cint): cint <cimport, nodecl> end
 
 -- wait
 ## cinclude '<sys/wait.h>'
@@ -65,6 +71,13 @@ global IN_CREATE: cint <cimport, nodecl, const>
 global IN_DELETE_SELF: cint <cimport, nodecl, const>
 global IN_MOVE_SELF: cint <cimport, nodecl, const>
 
+-- fcntl
+global O_WRONLY: cint <comptime> = 1
+global O_RDWR: cint <comptime> = 2
+global O_CREAT: cint <comptime> = 64
+global O_APPEND: cint <comptime> = 1024
+global F_OK: cint <comptime> = 0
+
 -- utilities
 
 global function msleep(ms: clong): void
@@ -83,6 +96,10 @@ end
 global function killwait(pid: cint, sig: cint): cint
   kill(pid, sig)
   return waitpid(pid, nilptr, 0)
+end
+
+global function filexists(path: cstring): boolean
+  return access(path, F_OK) == 0
 end
 
 require 'string'
