@@ -42,8 +42,7 @@ global function setpgid(pid: cint, pgid: cint): cint <cimport, nodecl> end
 global function fork(): cint <cimport, nodecl> end
 global function kill(pid: cint, sig: cint): cint <cimport, nodecl> end
 global function read(fd: cint, buf: pointer, nbytes: csize): clong <cimport, nodecl> end
--- global function close(fd: cint): cint <cimport, nodecl> end
--- global function _exit(status: cint) <cimport, nodecl> end
+global function close(fd: cint): cint <cimport, nodecl> end
 
 -- wait
 ## cinclude '<sys/wait.h>'
@@ -60,7 +59,6 @@ global inotify_event: type <cimport, nodecl, ctypedef> = @record{
 }
 global function inotify_init(): cint <cimport, nodecl> end
 global function inotify_add_watch(fd: cint, name: cstring, mask: uint32): cint <cimport, nodecl> end
--- global function inotify_rm_watch(fd: cint, wd: cint): cint <cimport, nodecl> end
 global IN_MODIFY: cint <cimport, nodecl, const>
 global IN_CREATE: cint <cimport, nodecl, const>
 global IN_DELETE_SELF: cint <cimport, nodecl, const>
