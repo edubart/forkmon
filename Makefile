@@ -1,3 +1,4 @@
+NFLAGS=--no-color --release -Pnogc -Pnochecks
 all:
-	nelua fmonhook.nelua -o fmonhook.so -Pnochecks --no-color
-	LD_PRELOAD=./fmonhook.so nelua -t hello.nelua
+	nelua $(NFLAGS) -o forkmonhook.so forkmonhook.nelua
+	LD_PRELOAD=./forkmonhook.so nelua -t hello.nelua

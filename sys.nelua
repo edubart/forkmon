@@ -1,6 +1,7 @@
 -- dl
 ## cdefine '_GNU_SOURCE'
 ## cinclude '<dlfcn.h>'
+## linklib 'dl'
 global function dlsym(handle: pointer, name: cstring): pointer <cimport, nodecl> end
 global RTLD_NEXT: pointer <cimport, nodecl, const>
 

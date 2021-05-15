@@ -1,6 +1,3 @@
-## pragmas.nogc = true
-## context.globalpragmas.nocstaticassert = true
-
 require 'sys'
 require 'string'
 require 'hashmap'
@@ -74,10 +71,10 @@ local function monitor_file(filename: string): boolean
         end
         pos = pos + #inotify_event + event.len
       end
-      if wdchange then
+      if wdchange then -- watched file for this process changed
         print('file changed: ', filename)
         parent_inotify_fd = inotify_fd
-      else
+      else -- watched file for a child process changed
         print('a dep file changed')
         parent_inotify_fd = -1
         -- reinitialize inotify to cleanup all old watches
@@ -90,7 +87,7 @@ local function monitor_file(filename: string): boolean
       if pid == 0 then -- let the child process continue
         setpgid(0, 0) -- set a new process group for the child
         local nowtext = tostring(now)
-        setenv("FMON_RESTART_TICKS", nowtext, 1)
+        setenv("FORKMON_RESTART_TICKS", nowtext, 1)
         nowtext:destroy()
         return true
       end
