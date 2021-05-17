@@ -110,7 +110,7 @@ instead of caching them in memory.
 
 ## Troubleshooting
 
-In case you get the error ``[forkmon] failed to initialize inotify` then
+In case you get the error `[forkmon] failed to initialize inotify` then
 is probably because too many inotify instances are active,
 then try to increase this limit with `sudo sysctl -w user.max_inotify_instances=1024`
 or kill any zombie processes of the application (in edge cases can happen).
