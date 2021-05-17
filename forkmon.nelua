@@ -36,7 +36,7 @@ local orig_fopen64: FopenFunc
 local orig_open: OpenFunc
 
 -- Exit process and children processes.
-local function kill(code: cint)
+local function killapp(code: cint)
   killwait(root_pid, SIGUSR2)
   exit(code)
 end
@@ -61,7 +61,7 @@ local function errorf(fmt: string, ...: varargs)
   if not no_colors then io.stderr:write(Colors.Reset) end
   io.stderr:write('\n')
   io.stderr:flush()
-  kill(-1)
+  killapp(-1)
 end
 
 -- Kill the application with an error message if `cond` is false.
@@ -117,7 +117,7 @@ local function monitor_file(filename: string): boolean
   while true do -- keep waiting the file to change indefinitely
     local res = read(inotify_fd, nilptr, 0) -- wait for an event
     if res == -1 and errno == EINTR then -- interrupted by a signal (like Ctrl+C on terminal)
-      kill(0) -- recursive kill all children processes
+      killapp(0) -- recursive kill all children processes
     end
     usleep(restart_delay) -- wait some time so all file changes can flush
     local len = read(inotify_fd, &buf, #buf) -- wait an inotify event
@@ -181,9 +181,9 @@ local function track_file_open(name: cstring): boolean
 end
 
 -- Signal handler.
-local function signal_handler(signum: cint)
+local function signal_handler(signum: cint): cint
   if handling_signal then -- signal already being handled, this should hardly happen
-    return
+    return 0
   end
   handling_signal = true
   if child_pid ~= 0 then -- propagate kill on child process
@@ -191,6 +191,7 @@ local function signal_handler(signum: cint)
   end
   killwait(-getpid(), SIGKILL) -- kill all spawned sub processes
   _exit(0)
+  return 0
 end
 
 local function parse_env()
@@ -212,7 +213,6 @@ local function parse_env()
   for patt in string.gmatchview(filter_env, '[^;]+') do
     filter_patts[#filter_patts+1] = patt
   end
-  logf('watching files with filter "%s" ...', filter_env)
   -- restart delay
   local restart_delay_env: cstring = getenv('FORKMON_RESTART_DELAY')
   if restart_delay_env then
@@ -229,7 +229,14 @@ end
 
 do -- initialize
   -- setup signal handler, used to recursively propagate kill signal on children processes
-  assertkill(signal(SIGUSR2, signal_handler) == 0, 'failed to setup signal handler')
+  signal(SIGUSR2, signal_handler)
+  signal(SIGTERM, signal_handler)
+  signal(SIGINT, signal_handler)
+  signal(SIGSEGV, signal_handler)
+  signal(SIGBUS, signal_handler)
+  signal(SIGABRT, signal_handler)
+  signal(SIGFPE, signal_handler)
+
   parse_env()
   initialized = true
 end

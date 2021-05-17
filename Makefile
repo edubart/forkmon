@@ -15,5 +15,12 @@ forkmon.so: forkmon.c
 forkmon.c: forkmon.nelua sys.nelua
 	nelua $(NFLAGS) -o forkmon.c forkmon.nelua
 
+prebuilt: forkmon.so
+	cp forkmon.so bin/linux64/
+
 clean:
 	rm -f forkmon.so
+
+clean-all:
+	rm -f forkmon.so
+	rm -f forkmon.c

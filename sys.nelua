@@ -21,7 +21,7 @@ global FILE <cimport,nodecl,forwarddecl> = @record{}
 -- errno
 ## cinclude '<errno.h>'
 global errno: cint <cimport, nodecl>
-global EINTR: cint <comptime> = 4
+global EINTR: cint <cimport, nodecl, const>
 
 -- time
 ## cinclude '<time.h>'
@@ -36,9 +36,15 @@ global CLOCK_MONOTONIC: cint <comptime> = 1
 
 -- signal
 ## cinclude '<signal.h>'
-global function signal(sig: cint, handler: function(cint)): function(cint) <cimport, nodecl> end
-global SIGKILL: cint <comptime> = 9
-global SIGUSR2: cint <comptime> = 12
+global function signal(sig: cint, handler: function(cint): cint): function(cint): cint <cimport, nodecl> end
+global SIGKILL: cint <cimport, nodecl, const>
+global SIGTERM: cint <cimport, nodecl, const>
+global SIGSEGV: cint <cimport, nodecl, const>
+global SIGBUS: cint <cimport, nodecl, const>
+global SIGFPE: cint <cimport, nodecl, const>
+global SIGABRT: cint <cimport, nodecl, const>
+global SIGINT: cint <cimport, nodecl, const>
+global SIGUSR2: cint <cimport, nodecl, const>
 
 -- unistd
 ## cinclude '<unistd.h>'
@@ -71,11 +77,12 @@ global IN_DELETE_SELF: cint <cimport, nodecl, const>
 global IN_MOVE_SELF: cint <cimport, nodecl, const>
 
 -- fcntl
-global O_WRONLY: cint <comptime> = 1
-global O_RDWR: cint <comptime> = 2
-global O_CREAT: cint <comptime> = 64
-global O_APPEND: cint <comptime> = 1024
-global F_OK: cint <comptime> = 0
+## cinclude '<fcntl.h>'
+global O_WRONLY: cint <cimport, nodecl, const>
+global O_RDWR: cint <cimport, nodecl, const>
+global O_CREAT: cint <cimport, nodecl, const>
+global O_APPEND: cint <cimport, nodecl, const>
+global F_OK: cint <cimport, nodecl, const>
 
 -- terminal color list
 global Colors = @record{}

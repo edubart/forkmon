@@ -18,7 +18,6 @@ forkmon-lua tests/example.lua
 Now when running the above you should get something like:
 
 ```sh
-[forkmon] watching files with filter "%.lua$" ...
 [forkmon] watch '/home/bart/projects/forkmon/example.lua'
 startup
 [forkmon] watch '/home/bart/projects/forkmon/foo.lua'
@@ -108,6 +107,13 @@ when compiling, however it works with TCC compiler thus TCC could be even faster
 * File descriptor offset are shared between processes (a `fork()` behavior),
 and this can be problematic for applications that keep files open
 instead of caching them in memory.
+
+## Troubleshooting
+
+In case you get the error ``[forkmon] failed to initialize inotify` then
+is probably because too many inotify instances are active,
+then try to increase this limit with `sudo sysctl -w user.max_inotify_instances=1024`
+or kill any zombie processes of the application (in edge cases can happen).
 
 ## Implementation details
 
