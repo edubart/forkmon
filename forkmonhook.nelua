@@ -15,11 +15,12 @@ require 'sequence'
 require 'hashmap'
 require 'io'
 
-local RESTART_DELAY <comptime> = 20
-local IGNORE_DELAY <comptime> = 200
+local restart_delay: uint64 = 20 * 1000
+local ignore_delay: uint64 = 200 * 1000
 local initialized: boolean = false
 local handling_signal: boolean = false
 local quiet: boolean = false
+local no_colors: boolean = false
 local parent_inotify_fd: cint = -1
 local child_pid: cint = 0
 local root_pid: cint = getpid()
@@ -33,11 +34,39 @@ local orig_fopen: FopenFunc
 local orig_fopen64: FopenFunc
 local orig_open: OpenFunc
 
--- Format message and output to stderr.
+-- Exit process and children processes.
+local function kill(code: cint)
+  killwait(root_pid, SIGUSR2)
+  exit(code)
+end
+
+-- Format info message and output to stderr.
 local function logf(fmt: string, ...: varargs)
   if not quiet then
+    if not no_colors then io.stderr:write(Colors.Yellow) end
+    io.stderr:write('[forkmon] ')
     io.stderr:writef(fmt, ...)
+    if not no_colors then io.stderr:write(Colors.Reset) end
+    io.stderr:write('\n')
     io.stderr:flush()
+  end
+end
+
+-- Format error message, output to stderr and kill the application.
+local function errorf(fmt: string, ...: varargs)
+  if not no_colors then io.stderr:write(Colors.Red) end
+  io.stderr:write('[forkmon] ')
+  io.stderr:writef(fmt, ...)
+  if not no_colors then io.stderr:write(Colors.Reset) end
+  io.stderr:write('\n')
+  io.stderr:flush()
+  kill(-1)
+end
+
+-- Kill the application with an error message if `cond` is false.
+local function assertkill(cond: boolean, msg: string)
+  if not cond then
+    errorf(msg)
   end
 end
 
@@ -54,9 +83,9 @@ end
 -- Create a new inotify instance and add file to watch.
 local function inotify_init_watch(filename: cstring, mask: cint): (cint, cint)
   local fd = inotify_init()
-  assert(fd >= 0, '[forkmon] failed to initialize inotify')
+  assertkill(fd >= 0, 'failed to initialize inotify')
   local wd = inotify_add_watch(fd, filename, mask) -- watch the file
-  assert(wd >= 0, '[forkmon] failed to watch file')
+  assertkill(wd >= 0, 'failed to watch file')
   return fd, wd
 end
 
@@ -66,16 +95,16 @@ local function monitor_file(filename: string): boolean
   if parent_inotify_fd >= 0 then -- a parent process restarted due to a file change
     -- lets just add this file to track in the parent inotify fd
     -- so we can avoid lot's of forks when changing the same file
-    -- logf("[forkmon] watch dependency '%s'\n", filename)
+    -- logf("watch dependency '%s'\n", filename)
     local inotify_wd = inotify_add_watch(parent_inotify_fd, filename, inotify_mask) -- watch the file
-    assert(inotify_wd >= 0, 'failed to watch file')
+    assertkill(inotify_wd >= 0, 'failed to watch file')
     return false
   end
   if not quiet then
-    logf("[forkmon] watch '%s'\n", filename)
+    logf("watch '%s'", filename)
   end
   local pid = fork() -- fork in two processes
-  assert(pid >= 0, '[forkmon] fork failed')
+  assertkill(pid >= 0, 'fork failed')
   if pid == 0 then -- let the child process continue
     setpgid(0, 0) -- set a new process group for the child
     return false
@@ -87,18 +116,18 @@ local function monitor_file(filename: string): boolean
   while true do -- keep waiting the file to change indefinitely
     local res = read(inotify_fd, nilptr, 0) -- wait for an event
     if res == -1 and errno == EINTR then -- interrupted by a signal (like Ctrl+C on terminal)
-      killwait(root_pid, SIGUSR2) -- recursive kill all children processes
+      kill(0) -- recursive kill all children processes
     end
-    msleep(RESTART_DELAY) -- wait some time so all file changes can flush
+    usleep(restart_delay) -- wait some time so all file changes can flush
     local len = read(inotify_fd, &buf, #buf) -- wait an inotify event
     if len > 0 then -- got an inotify event, must be a file change
       local now: uint64 = uticks()
-      if now - last_restart_ticks <= IGNORE_DELAY*1000 then
+      if now - last_restart_ticks <= ignore_delay then
         continue -- changed too soon, just ignore
       end
       last_restart_ticks = now
       local wdchange = false
-      local pos: cint = 0
+      local pos = 0
       while pos < len do
         local event: *inotify_event = (@*inotify_event)(&buf[pos])
         if event.wd == inotify_wd then
@@ -108,10 +137,10 @@ local function monitor_file(filename: string): boolean
         pos = pos + #inotify_event + event.len
       end
       if wdchange then -- watched file for this process changed
-        logf("[forkmon] file '%s' changed, resuming from it..\n", filename)
+        logf("file '%s' changed, resuming from it ...", filename)
         parent_inotify_fd = inotify_fd
       else -- watched file for a child process changed
-        logf("[forkmon] some file changed, resuming from '%s'...\n", filename)
+        logf("some file changed, resuming from '%s' ...", filename)
         parent_inotify_fd = -1
         -- reinitialize inotify to cleanup all old watches
         close(inotify_fd)
@@ -119,7 +148,7 @@ local function monitor_file(filename: string): boolean
       end
       killwait(pid, SIGUSR2) -- propagate children kill and wait them to finish
       pid = fork() -- fork in two processes
-      assert(pid >= 0, '[forkmon] fork failed')
+      assertkill(pid >= 0, 'fork failed')
       if pid == 0 then -- let the child process continue
         setpgid(0, 0) -- set a new process group for the child
         local nowtext = tostring(now)
@@ -160,26 +189,47 @@ local function signal_handler(signum: cint)
     killwait(child_pid, SIGUSR2)
   end
   killwait(-getpid(), SIGKILL) -- kill all spawned sub processes
+  _exit(0)
+end
+
+local function parse_env()
+  -- quiet
+  local quiet_env: cstring = getenv('FORKMON_QUIET')
+  if quiet_env then
+    quiet = true
+  end
+  -- no colors
+  local no_colors_env: cstring = getenv('FORKMON_NO_COLORS')
+  if no_colors_env then
+    no_colors = true
+  end
+  -- filter patterns
+  local filter_env: cstring = getenv('FORKMON_FILTER')
+  if not filter_env then
+    errorf('the environment variable FORKMON_FILTER is not set, please set one (example FORKMON_FILTER="%.lua$")\n')
+  end
+  for patt in string.gmatchview(filter_env, '[^;]+') do
+    filter_patts[#filter_patts+1] = patt
+  end
+  logf('watching files with filter "%s" ...', filter_env)
+  -- restart delay
+  local restart_delay_env: cstring = getenv('FORKMON_RESTART_DELAY')
+  if restart_delay_env then
+    restart_delay = tointeger(restart_delay_env) * 1000
+  end
+  -- ignore delay
+  local ignore_delay_env: cstring = getenv('FORKMON_IGNORE_DELAY')
+  if ignore_delay_env then
+    ignore_delay = tointeger(ignore_delay_env) * 1000
+  end
+  -- unset LD_PRELOAD because we don't want to monitor children processes
+  unsetenv("LD_PRELOAD")
 end
 
 do -- initialize
   -- setup signal handler, used to recursively propagate kill signal on children processes
-  assert(signal(SIGUSR2, signal_handler) == 0, '[forkmon] failed to setup signal handler')
-  -- unsert LD_PRELOAD because we don't want to monitor children processes
-  unsetenv("LD_PRELOAD")
-  -- get filter
-  local filter: string = getenv('FORKMON_FILTER')
-  if not filter then
-    logf("[forkmon] %s", 'the environment variable FORKMON_FILTER is not set, please set one (example FORKMON_FILTER="%.lua$")\n')
-    exit(-1)
-  end
-  for patt in filter:gmatchview('[^;]+') do
-    filter_patts[#filter_patts+1] = patt
-  end
-  if getenv('FORKMON_QUIET') then
-    quiet = true
-  end
-  -- mask as initialized
+  assertkill(signal(SIGUSR2, signal_handler) == 0, 'failed to setup signal handler')
+  parse_env()
   initialized = true
 end
 

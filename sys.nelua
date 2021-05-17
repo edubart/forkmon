@@ -12,6 +12,7 @@ global function setenv(name: cstring, value: cstring, overwrite: cint): cint <ci
 global function getenv(name: cstring): cstring <cimport, nodecl> end
 global function unsetenv(name: cstring): cint <cimport, nodecl> end
 global function exit(status: cint): void <cimport, nodecl> end
+global function _exit(status: cint): void <cimport, nodecl> end
 
 -- stdio
 ## cinclude '<stdio.h>'
@@ -75,12 +76,18 @@ global O_CREAT: cint <comptime> = 64
 global O_APPEND: cint <comptime> = 1024
 global F_OK: cint <comptime> = 0
 
+-- terminal color list
+global Colors = @record{}
+global Colors.Yellow: string = '\27[33m'
+global Colors.Red: string = '\27[31m'
+global Colors.Reset: string = '\27[0m'
+
 -- utilities
 
-global function msleep(ms: clong): void
+global function usleep(ms: uint64): void
   local ts: timespec
-  ts.tv_sec = ms /// 1000
-  ts.tv_nsec = (ms %%% 1000) * 1000000
+  ts.tv_sec = ms // 1000000
+  ts.tv_nsec = (ms % 1000000) * 1000
   nanosleep(&ts, nilptr)
 end
 

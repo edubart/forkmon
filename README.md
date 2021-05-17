@@ -11,12 +11,14 @@ on the middle:
 ```sh
 git clone https://github.com/edubart/forkmon.git && cd forkmon
 make
-LD_PRELOAD=./forkmonhook.so FORKMON_FILTER="%.lua$" lua tests/example.lua
+alias forkmon-lua='LD_PRELOAD=`pwd`/forkmonhook.so FORKMON_FILTER="%.lua$" lua'
+forkmon-lua tests/example.lua
 ```
 
 Now when running the above you should get something like:
 
-```
+```sh
+[forkmon] watching files with filter "%.lua$" ...
 [forkmon] watch '/home/bart/projects/forkmon/example.lua'
 startup
 [forkmon] watch '/home/bart/projects/forkmon/foo.lua'
@@ -26,7 +28,7 @@ finished
 
 The application will keep running, waiting for any watched file change.
 Now try to edit to `foo.lua` and change the print to `'hello world!'`, you should get something like:
-```
+```sh
 [forkmon] file '/home/bart/projects/forkmon/tests/foo.lua' changed, resuming from it..
 hello world!
 finished
@@ -63,7 +65,13 @@ The tool can be configured using the following environment variables:
 * `FORKMON_FILTER` pattern that a watched file name should match, following [Lua pattern rules](https://www.lua.org/manual/5.4/manual.html#6.4.1),
 multiple filter patterns can be used when using the `;` separator.
 * `FORKMON_QUIET` if set, the tool will be quiet and not print anything.
-
+* `FORKMON_NO_COLORS` if set, no colors will be used in terminal output.
+* `FORKMON_RESTART_DELAY` how many milliseconds to wait before restarting the application when a file has changed (default 20).
+Must be more than 0, so the OS can properly flush all file changes.
+* `FORKMON_IGNORE_DELAY` how many milliseconds to ignore new changes
+after a file has been changed (default 200).
+Must be more than 0, so when saving files in a batch does not trigger
+many restarts.
 ## Motivation
 
 I had this idea other day when thinking in ways to speedup the [Nelua](https://nelua.io/) compiler, this tool can be used there to skip redundant compiler work.
