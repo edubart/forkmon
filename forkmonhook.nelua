@@ -239,7 +239,7 @@ local function fopen(filename: cstring <const, restrict>, mode: cstring <const, 
   if not orig_fopen then
     orig_fopen = (@FopenFunc)(dlsym(RTLD_NEXT, "fopen"))
   end
-  if mode == 'r' and filexists(filename) then
+  if (mode == 'r' or mode == 'rb') and filexists(filename) then
     track_file_open(filename)
   end
   local fp: *FILE = orig_fopen(filename, mode)
@@ -251,7 +251,7 @@ local function fopen64(filename: cstring <const, restrict>, mode: cstring <const
   if not orig_fopen64 then
     orig_fopen64 = (@FopenFunc)(dlsym(RTLD_NEXT, "fopen64"))
   end
-  if mode == 'r' and filexists(filename) then
+  if (mode == 'r' or mode == 'rb') and filexists(filename) then
     track_file_open(filename)
   end
   local fp: *FILE = orig_fopen64(filename, mode)
