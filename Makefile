@@ -13,3 +13,6 @@ forkmonhook.so: forkmonhook.c
 
 forkmonhook.c: forkmonhook.nelua sys.nelua
 	nelua $(NFLAGS) -o forkmonhook.c forkmonhook.nelua
+
+clean:
+	rm -f forkmonhook.so

@@ -11,6 +11,7 @@ See end of file for license.
 
 require 'sys'
 require 'string'
+require 'sequence'
 require 'hashmap'
 require 'io'
 
@@ -23,7 +24,7 @@ local parent_inotify_fd: cint = -1
 local child_pid: cint = 0
 local root_pid: cint = getpid()
 local last_restart_ticks: uint64
-local filter: cstring
+local filter_patts: sequence(string)
 local time_checkpoint: timespec
 local tracked_files: hashmap(string, boolean)
 local FopenFunc: type = @function(cstring, cstring): *FILE
@@ -31,6 +32,24 @@ local OpenFunc: type = @function(cstring, cint, cint): cint
 local orig_fopen: FopenFunc
 local orig_fopen64: FopenFunc
 local orig_open: OpenFunc
+
+-- Format message and output to stderr.
+local function logf(fmt: string, ...: varargs)
+  if not quiet then
+    io.stderr:writef(fmt, ...)
+    io.stderr:flush()
+  end
+end
+
+-- Check weather a filename matches a filter pattern.
+local function filter_filename(filename: string): boolean
+  for _,patt in ipairs(filter_patts) do
+    if filename:find(patt) ~= 0 then
+      return true
+    end
+  end
+  return false
+end
 
 -- Create a new inotify instance and add file to watch.
 local function inotify_init_watch(filename: cstring, mask: cint): (cint, cint)
@@ -41,15 +60,8 @@ local function inotify_init_watch(filename: cstring, mask: cint): (cint, cint)
   return fd, wd
 end
 
-local function logf(fmt: string, ...: varargs)
-  if not quiet then
-    io.stderr:writef(fmt, ...)
-    io.stderr:flush()
-  end
-end
-
 -- Monitor a file for changes, returns true when the filed changed.
-local function monitor_file(filename: cstring): boolean
+local function monitor_file(filename: string): boolean
   local inotify_mask: cint = IN_MODIFY | IN_CREATE | IN_DELETE_SELF | IN_MOVE_SELF
   if parent_inotify_fd >= 0 then -- a parent process restarted due to a file change
     -- lets just add this file to track in the parent inotify fd
@@ -130,7 +142,7 @@ local function track_file_open(name: cstring): boolean
   defer filename:destroy() end
   if filename == '' or -- skip failed path resolutions
      filename:find('^/tmp') ~= 0 or -- skip temporary files
-     filename:find(filter) == 0 or -- skip files not in the filter
+     not filter_filename(filename) or -- skip files not in the filter
      tracked_files:peek(filename) then -- skip files already tracked
     return false
   end
@@ -156,10 +168,13 @@ do -- initialize
   -- unsert LD_PRELOAD because we don't want to monitor children processes
   unsetenv("LD_PRELOAD")
   -- get filter
-  filter = getenv('FORKMON_FILTER')
+  local filter: string = getenv('FORKMON_FILTER')
   if not filter then
     logf("[forkmon] %s", 'the environment variable FORKMON_FILTER is not set, please set one (example FORKMON_FILTER="%.lua$")\n')
     exit(-1)
+  end
+  for patt in filter:gmatchview('[^;]+') do
+    filter_patts[#filter_patts+1] = patt
   end
   if getenv('FORKMON_QUIET') then
     quiet = true

@@ -60,7 +60,8 @@ This allows to gain a few startup time in live development scenarios.
 
 The tool can be configured using the following environment variables:
 
-* `FORKMON_FILTER` pattern that a watched file name should match, following [Lua pattern rules](https://www.lua.org/manual/5.4/manual.html#6.4.1).
+* `FORKMON_FILTER` pattern that a watched file name should match, following [Lua pattern rules](https://www.lua.org/manual/5.4/manual.html#6.4.1),
+multiple filter patterns can be used when using the `;` separator.
 * `FORKMON_QUIET` if set, the tool will be quiet and not print anything.
 
 ## Motivation
