@@ -11,7 +11,7 @@ on the middle:
 ```sh
 git clone https://github.com/edubart/forkmon.git && cd forkmon
 make
-alias forkmon-lua='LD_PRELOAD=`pwd`/forkmonhook.so FORKMON_FILTER="%.lua$" lua'
+alias forkmon-lua='LD_PRELOAD=`pwd`/forkmon.so FORKMON_FILTER="%.lua$" lua'
 forkmon-lua tests/example.lua
 ```
 

@@ -3,16 +3,17 @@ NFLAGS=--no-color -Pnogc -Pnochecks -Pnocstaticassert
 CFLAGS=-Os
 CC=gcc
 
-all: forkmonhook.so
+all: forkmon.so
 
 test:
-	LD_PRELOAD=./forkmonhook.so FORKMON_FILTER="%.lua$$" lua tests/example.lua
+	LD_PRELOAD=./forkmon.so FORKMON_FILTER="%.lua$$" lua tests/example.lua
 
-forkmonhook.so: forkmonhook.c
-	$(CC) forkmonhook.c -o forkmonhook.so $(CFLAGS) -fPIC -shared -ldl
+forkmon.so: forkmon.c
+	$(CC) forkmon.c -o forkmon.so $(CFLAGS) -fPIC -shared -ldl
+	strip forkmon.so
 
-forkmonhook.c: forkmonhook.nelua sys.nelua
-	nelua $(NFLAGS) -o forkmonhook.c forkmonhook.nelua
+forkmon.c: forkmon.nelua sys.nelua
+	nelua $(NFLAGS) -o forkmon.c forkmon.nelua
 
 clean:
-	rm -f forkmonhook.so
+	rm -f forkmon.so
