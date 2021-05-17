@@ -14,6 +14,7 @@ require 'string'
 require 'sequence'
 require 'hashmap'
 require 'io'
+require 'C.stdarg'
 
 local restart_delay: uint64 = 20 * 1000
 local ignore_delay: uint64 = 200 * 1000
@@ -234,7 +235,7 @@ do -- initialize
 end
 
 -- Hook `fopen`.
-local function fopen(filename: cstring <const>, mode: cstring <const>): *FILE <cexport, codename 'fopen'>
+local function fopen(filename: cstring <const, restrict>, mode: cstring <const, restrict>): *FILE <cexport, codename 'fopen'>
   if not orig_fopen then
     orig_fopen = (@FopenFunc)(dlsym(RTLD_NEXT, "fopen"))
   end
@@ -246,7 +247,7 @@ local function fopen(filename: cstring <const>, mode: cstring <const>): *FILE <c
 end
 
 -- Hook `fopen64`.
-local function fopen64(filename: cstring <const>, mode: cstring <const>): *FILE <cexport, codename 'fopen64'>
+local function fopen64(filename: cstring <const, restrict>, mode: cstring <const, restrict>): *FILE <cexport, codename 'fopen64'>
   if not orig_fopen64 then
     orig_fopen64 = (@FopenFunc)(dlsym(RTLD_NEXT, "fopen64"))
   end
@@ -258,7 +259,7 @@ local function fopen64(filename: cstring <const>, mode: cstring <const>): *FILE 
 end
 
 -- Hook `open`.
-local function open(path: cstring, flags: cint, mode: cint): cint <cexport, codename 'open'>
+local function open(path: cstring <const, restrict>, flags: cint, ...: cvarargs): cint <cexport, codename 'open'>
   if not orig_open then
     orig_open = (@OpenFunc)(dlsym(RTLD_NEXT, "open"))
   end
@@ -266,6 +267,10 @@ local function open(path: cstring, flags: cint, mode: cint): cint <cexport, code
   if flags & writeflags == 0 and filexists(path) then
     track_file_open(path)
   end
+  local args: cvalist
+  C.va_start(args, flags)
+  local mode: cint = C.va_arg(args, @cint)
+  C.va_end(args)
   local fd: cint = orig_open(path, flags, mode)
   return fd
 end
