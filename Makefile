@@ -24,3 +24,4 @@ clean:
 clean-all:
 	rm -f forkmon.so
 	rm -f forkmon.c
+	rm -f bin/linux64/forkmon.so
