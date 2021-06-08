@@ -65,7 +65,7 @@ The tool can be configured using the following environment variables:
 multiple filter patterns can be used when using the `;` separator.
 * `FORKMON_QUIET` if set, the tool will be quiet and not print anything.
 * `FORKMON_NO_COLORS` if set, no colors will be used in terminal output.
-* `FORKMON_RESTART_DELAY` how many milliseconds to wait before restarting the application when a file has changed (default 20).
+* `FORKMON_RESTART_DELAY` how many milliseconds to wait before restarting the application when a file has changed (default 50).
 Must be more than 0, so the OS can properly flush all file changes.
 * `FORKMON_IGNORE_DELAY` how many milliseconds to ignore new changes
 after a file has been changed (default 200).

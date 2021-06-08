@@ -16,7 +16,7 @@ require 'hashmap'
 require 'io'
 require 'C.stdarg'
 
-local restart_delay: uint64 = 20 * 1000
+local restart_delay: uint64 = 50 * 1000
 local ignore_delay: uint64 = 200 * 1000
 local initialized: boolean = false
 local handling_signal: boolean = false
