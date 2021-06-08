@@ -9,6 +9,7 @@ test:
 	LD_PRELOAD=./forkmon.so FORKMON_FILTER="%.lua$$" lua tests/example.lua
 
 forkmon.so: forkmon.c
+	mkdir -p bin/linux64
 	$(CC) forkmon.c -o forkmon.so $(CFLAGS) -fPIC -shared -ldl
 	strip forkmon.so
 
@@ -24,4 +25,4 @@ clean:
 clean-all:
 	rm -f forkmon.so
 	rm -f forkmon.c
-	rm -f bin/linux64/forkmon.so
+	rm -rf bin
