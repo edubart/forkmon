@@ -86,7 +86,7 @@ local function inotify_init_watch(filename: cstring, mask: cint): (cint, cint)
   local fd = inotify_init()
   assertkill(fd >= 0, 'failed to initialize inotify')
   local wd = inotify_add_watch(fd, filename, mask) -- watch the file
-  assertkill(wd >= 0, 'failed to watch file')
+  assertkill(wd >= 0, 'failed to watch file after init')
   return fd, wd
 end
 
@@ -98,7 +98,7 @@ local function monitor_file(filename: string): boolean
     -- so we can avoid lot's of forks when changing the same file
     -- logf("watch dependency '%s'\n", filename)
     local inotify_wd = inotify_add_watch(parent_inotify_fd, filename, inotify_mask) -- watch the file
-    assertkill(inotify_wd >= 0, 'failed to watch file')
+    assertkill(inotify_wd >= 0, 'failed to watch a file')
     return false
   end
   if not quiet then
@@ -123,7 +123,7 @@ local function monitor_file(filename: string): boolean
     -- must rewatch the file, because the old wd may be invalid
     inotify_rm_watch(inotify_fd, inotify_wd)
     inotify_wd = inotify_add_watch(inotify_fd, filename, inotify_mask)
-    assertkill(inotify_wd >= 0, 'failed to watch file')
+    assertkill(inotify_wd >= 0, 'failed to rewatch file')
     local len = read(inotify_fd, &buf, #buf) -- wait an inotify event
     if len > 0 then -- got an inotify event, must be a file change
       local now: uint64 = uticks()

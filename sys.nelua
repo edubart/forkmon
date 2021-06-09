@@ -25,7 +25,6 @@ global EINTR: cint <cimport, nodecl, const>
 
 -- time
 ## cinclude '<time.h>'
-## cemitdecl [[__asm__(".symver clock_gettime,clock_gettime@GLIBC_2.2.5");]]
 global timespec: type <cimport, nodecl, ctypedef 'timespec'> = @record{
   tv_sec: clong,
   tv_nsec: clong
