@@ -120,6 +120,10 @@ local function monitor_file(filename: string): boolean
       killapp(0) -- recursive kill all children processes
     end
     usleep(restart_delay) -- wait some time so all file changes can flush
+    -- must rewatch the file, because the old wd may be invalid
+    inotify_rm_watch(inotify_fd, inotify_wd)
+    inotify_wd = inotify_add_watch(inotify_fd, filename, inotify_mask)
+    assertkill(inotify_wd >= 0, 'failed to watch file')
     local len = read(inotify_fd, &buf, #buf) -- wait an inotify event
     if len > 0 then -- got an inotify event, must be a file change
       local now: uint64 = uticks()

@@ -71,6 +71,7 @@ global inotify_event: type <cimport, nodecl, ctypedef> = @record{
 }
 global function inotify_init(): cint <cimport, nodecl> end
 global function inotify_add_watch(fd: cint, name: cstring, mask: uint32): cint <cimport, nodecl> end
+global function inotify_rm_watch(fd: cint, wd: cint): cint <cimport, nodecl> end
 global IN_MODIFY: cint <cimport, nodecl, const>
 global IN_CREATE: cint <cimport, nodecl, const>
 global IN_DELETE_SELF: cint <cimport, nodecl, const>
