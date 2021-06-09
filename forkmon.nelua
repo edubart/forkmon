@@ -11,9 +11,9 @@ See end of file for license.
 
 require 'sys'
 require 'string'
-require 'sequence'
 require 'hashmap'
 require 'io'
+require 'string'
 require 'C.stdarg'
 
 local restart_delay: uint64 = 50 * 1000
@@ -22,11 +22,13 @@ local initialized: boolean = false
 local handling_signal: boolean = false
 local quiet: boolean = false
 local no_colors: boolean = false
+local preload_disabled: boolean = false
 local parent_inotify_fd: cint = -1
 local child_pid: cint = 0
 local root_pid: cint = getpid()
 local last_restart_ticks: uint64
-local filter_patts: sequence(string)
+local filter_patts_count: cint = 0
+local filter_patts: [32]string
 local time_checkpoint: timespec
 local tracked_files: hashmap(string, boolean)
 local FopenFunc: type = @function(cstring, cstring): *FILE
@@ -73,7 +75,8 @@ end
 
 -- Check weather a filename matches a filter pattern.
 local function filter_filename(filename: string): boolean
-  for _,patt in ipairs(filter_patts) do
+  for i=0,<filter_patts_count do
+    local patt = filter_patts[i]
     if filename:find(patt) ~= 0 then
       return true
     end
@@ -84,7 +87,7 @@ end
 -- Create a new inotify instance and add file to watch.
 local function inotify_init_watch(filename: cstring, mask: cint): (cint, cint)
   local fd = inotify_init()
-  assertkill(fd >= 0, 'failed to initialize inotify')
+  assertkill(fd >= 0, 'failed to initialize inotify, maybe increase "user.max_inotify_instances" in sysctl?')
   local wd = inotify_add_watch(fd, filename, mask) -- watch the file
   assertkill(wd >= 0, 'failed to watch file after init')
   return fd, wd
@@ -122,8 +125,12 @@ local function monitor_file(filename: string): boolean
     usleep(restart_delay) -- wait some time so all file changes can flush
     -- must rewatch the file, because the old wd may be invalid
     inotify_rm_watch(inotify_fd, inotify_wd)
-    inotify_wd = inotify_add_watch(inotify_fd, filename, inotify_mask)
-    assertkill(inotify_wd >= 0, 'failed to rewatch file')
+    for i=1,10 do -- try to watch 10 times
+      inotify_wd = inotify_add_watch(inotify_fd, filename, inotify_mask)
+      if inotify_wd >= 0 then break end -- watch succeeded
+      usleep(restart_delay) -- wait more time
+    end
+    assertkill(inotify_wd >= 0, 'failed to rewatch file, does the file still exist?')
     local len = read(inotify_fd, &buf, #buf) -- wait an inotify event
     if len > 0 then -- got an inotify event, must be a file change
       local now: uint64 = uticks()
@@ -172,13 +179,18 @@ local function track_file_open(name: cstring): boolean
   if not initialized then -- ignore when the library was not initialized yet
     return false
   end
-  local filename = resolvpath(name)
-  defer filename:destroy() end
+  local buf: [4097]cchar
+  local filename = resolvpath(name, &buf, #buf)
   if filename == '' or -- skip failed path resolutions
      filename:find('^/tmp') ~= 0 or -- skip temporary files
      not filter_filename(filename) or -- skip files not in the filter
      tracked_files:peek(filename) then -- skip files already tracked
     return false
+  end
+  if not preload_disabled then
+    -- unset LD_PRELOAD because we don't want to monitor children processes
+    unsetenv("LD_PRELOAD")
+    preload_disabled = true
   end
   tracked_files:set(string.copy(filename), true)
   return monitor_file(filename)
@@ -215,7 +227,11 @@ local function parse_env()
     errorf('the environment variable FORKMON_FILTER is not set, please set one (example FORKMON_FILTER="%.lua$")\n')
   end
   for patt in string.gmatchview(filter_env, '[^;]+') do
-    filter_patts[#filter_patts+1] = patt
+    if filter_patts_count >= #filter_patts then
+      errorf('max number of filter patterns reached')
+    end
+    filter_patts[filter_patts_count] = patt
+    filter_patts_count = filter_patts_count + 1
   end
   -- restart delay
   local restart_delay_env: cstring = getenv('FORKMON_RESTART_DELAY')
@@ -227,8 +243,6 @@ local function parse_env()
   if ignore_delay_env then
     ignore_delay = tointeger(ignore_delay_env) * 1000
   end
-  -- unset LD_PRELOAD because we don't want to monitor children processes
-  unsetenv("LD_PRELOAD")
 end
 
 do -- initialize

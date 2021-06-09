@@ -114,11 +114,9 @@ global function filexists(path: cstring): boolean
   return access(path, F_OK) == 0
 end
 
-require 'string'
-global function resolvpath(path: string): string
-  local resolved_path: [4097]cchar
-  if #path < #resolved_path and realpath(path, &resolved_path[0]) then
-    return string.copy(&resolved_path[0])
+global function resolvpath(path: cstring, buf: cstring, len: cint): string
+  if #path < len and realpath(path, buf) then
+    return (@string){buf, #buf}
   end
-  return ''
+  return (@string){}
 end
