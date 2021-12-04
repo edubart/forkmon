@@ -35,7 +35,7 @@ global CLOCK_MONOTONIC: cint <comptime> = 1
 
 -- signal
 ## cinclude '<signal.h>'
-global function signal(sig: cint, handler: function(cint): cint): function(cint): cint <cimport, nodecl> end
+global function signal(sig: cint, handler: function(cint): void): function(cint): void <cimport, nodecl> end
 global SIGKILL: cint <cimport, nodecl, const>
 global SIGTERM: cint <cimport, nodecl, const>
 global SIGSEGV: cint <cimport, nodecl, const>
@@ -110,7 +110,7 @@ global function killwait(pid: cint, sig: cint): cint
   return waitpid(pid, nilptr, 0)
 end
 
-global function filexists(path: cstring): boolean
+global function filexists(path: cstring <const>): boolean
   return access(path, F_OK) == 0
 end
 

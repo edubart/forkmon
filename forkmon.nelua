@@ -192,14 +192,14 @@ local function track_file_open(name: cstring): boolean
     unsetenv("LD_PRELOAD")
     preload_disabled = true
   end
-  tracked_files:set(string.copy(filename), true)
+  tracked_files[string.copy(filename)] = true
   return monitor_file(filename)
 end
 
 -- Signal handler.
-local function signal_handler(signum: cint): cint
+local function signal_handler(signum: cint): void
   if handling_signal then -- signal already being handled, this should hardly happen
-    return 0
+    return
   end
   handling_signal = true
   if child_pid ~= 0 then -- propagate kill on child process
@@ -207,7 +207,7 @@ local function signal_handler(signum: cint): cint
   end
   killwait(-getpid(), SIGKILL) -- kill all spawned sub processes
   _exit(0)
-  return 0
+  return
 end
 
 local function parse_env()

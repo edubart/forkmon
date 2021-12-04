@@ -1,5 +1,5 @@
 NELUA=nelua
-NFLAGS=--no-color -Pnogc -Pnochecks -Pnocstaticassert
+NFLAGS=--no-color -Pnogc -Pnochecks -Pnocstaticassert -Pnocfeaturessetup
 CFLAGS=-Os
 CC=gcc
 
